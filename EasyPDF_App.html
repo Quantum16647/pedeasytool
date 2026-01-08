@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <meta name="theme-color" content="#2563eb">
+    <title>PDF Editor Suite</title>
+    
+    <link rel="manifest" href="data:application/manifest+json;base64,ewogICJuYW1lIjogIkVhc3lQREYgT3JnYW5pemVyIiwKICAic2hvcnRfbmFtZSI6ICJFYXN5UERGIiwKICAic3RhcnRfdXJsIjogIi4iLAogICJkaXNwbGF5IjogInN0YW5kYWxvbmUiLAogICJiYWNrZ3JvdW5kX2NvbG9yIjogIiNmZmZmZmYiLAogICJ0aGVtZV9jb2xvciI6ICIjMjU2M2ViIiwKICAiaWNvbnMiOiBbCiAgICB7CiAgICAgICJzcmMiOiAiaHR0cHM6Ly9jZG4tYWljb25zLXh4bC5mbGF0aWNvbi5jb20vc3ZnLzMzNy8zMzc5NDYuc3ZnIiwKICAgICAgInR5cGUiOiAiaW1hZ2Uvc3ZnK3htbCIsCiAgICAgICJzaXplcyI6ICI1MTJ4NTEyIgogICAgfQogIF0KfQ==">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    
+    <style>
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f3f4f6;
+        }
+        .pdf-page-card {
+            transition: transform 0.2s, box-shadow 0.2s;
+            touch-action: none;
+        }
+        .pdf-page-card.sortable-ghost {
+            opacity: 0.4;
+            background-color: #bfdbfe;
+        }
+        .pdf-page-card.sortable-drag {
+            cursor: grabbing;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .hide-scroll::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scroll {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden text-slate-800">
+
+<header class="bg-white shadow-sm z-20 px-4 md:px-6 py-3 flex justify-between items-center border-b border-slate-200">
+    <div class="flex items-center gap-3">
+        <div class="bg-blue-600 text-white p-2 rounded-lg shadow-sm">
+            <span class="material-symbols-outlined text-2xl">picture_as_pdf</span>
+        </div>
+        <div>
+            <h1 class="font-bold text-lg md:text-xl tracking-tight text-slate-800 leading-tight">EasyPDF Organizer</h1>
+            <p class="text-xs text-slate-500 hidden sm:block">整理・結合・空白挿入・保存</p>
+        </div>
+    </div>
+    <div class="flex gap-2 sm:gap-3">
+        <button id="downloadSourceBtn" class="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg font-medium transition-colors text-sm border border-slate-300" title="このアプリをファイルとして保存">
+            <span class="material-symbols-outlined text-xl">download</span>
+            <span class="hidden md:inline">アプリを保存</span>
+        </button>
+        <button id="installAppBtn" class="flex items-center gap-2 text-slate-600 hover:bg-slate-100 px-3 py-2 rounded-lg font-medium transition-colors text-sm" title="インストール方法">
+            <span class="material-symbols-outlined text-xl">help</span>
+            <span class="hidden md:inline">使い方</span>
+        </button>
+    </div>
+</header>
+
+<main class="flex-1 relative overflow-hidden flex flex-col">
+    
+    <div id="upload-section" class="absolute inset-0 z-10 bg-slate-50 flex flex-col items-center justify-center p-6 transition-all duration-300">
+        <div id="drop-zone" class="bg-white p-10 rounded-2xl shadow-xl max-w-lg w-full text-center border-2 border-dashed border-blue-200 hover:border-blue-400 transition-colors cursor-pointer group">
+            <div class="mb-6 bg-blue-50 w-24 h-24 rounded-full flex items-center justify-center mx-auto group-hover:scale-110 transition-transform duration-300">
+                <span class="material-symbols-outlined text-5xl text-blue-500">cloud_upload</span>
+            </div>
+            <h2 class="text-2xl font-bold text-slate-700 mb-2">PDFをここにドロップ</h2>
+            <p class="text-slate-500 mb-6">最初のファイルを選択して編集を開始します</p>
+            
+            <input type="file" id="file-input" class="hidden" accept="application/pdf">
+            <button onclick="document.getElementById('file-input').click()" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-full shadow-lg transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2 mx-auto">
+                <span class="material-symbols-outlined">folder_open</span>
+                ファイルを選択
+            </button>
+        </div>
+        <p class="mt-8 text-sm text-slate-400 max-w-md text-center">
+            <span class="material-symbols-outlined text-sm align-text-bottom">lock</span>
+            処理はすべてブラウザ内で完結します。
+        </p>
+    </div>
+
+    <div id="workspace-section" class="flex-1 flex flex-col h-full hidden">
+        <div class="bg-white border-b border-slate-200 px-4 md:px-6 py-3 flex flex-col sm:flex-row items-center justify-between shadow-sm z-10 gap-3">
+            
+            <div class="flex items-center gap-2 w-full sm:w-auto">
+                <button id="add-blank-btn" class="flex-1 sm:flex-none flex items-center justify-center gap-1 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm">
+                    <span class="material-symbols-outlined text-lg">post_add</span>
+                    <span>空白ページ</span>
+                </button>
+                
+                <input type="file" id="append-input" class="hidden" accept="application/pdf">
+                <button onclick="document.getElementById('append-input').click()" class="flex-1 sm:flex-none flex items-center justify-center gap-1 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm">
+                    <span class="material-symbols-outlined text-lg">library_add</span>
+                    <span>PDF追加</span>
+                </button>
+
+                 <div class="h-6 w-px bg-slate-300 hidden sm:block mx-2"></div>
+                 
+                 <button id="reset-btn" class="text-slate-500 hover:text-red-500 flex items-center gap-1 text-sm font-medium px-2 py-1.5 rounded-lg hover:bg-red-50 transition-colors" title="リセット">
+                    <span class="material-symbols-outlined text-lg">delete_sweep</span>
+                </button>
+            </div>
+
+            <div class="flex items-center gap-4 w-full sm:w-auto justify-end">
+                <span id="page-count" class="text-slate-500 text-sm font-medium whitespace-nowrap">0 ページ</span>
+                <button id="save-btn" class="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-full shadow-md transition-all flex items-center justify-center gap-2 transform active:scale-95">
+                    <span class="material-symbols-outlined">save</span>
+                    保存
+                </button>
+            </div>
+        </div>
+
+        <div id="editor-area" class="flex-1 overflow-y-auto bg-slate-100 p-4 md:p-6 scroll-smooth">
+            <div id="loader" class="hidden flex flex-col items-center justify-center h-full fixed inset-0 z-50 bg-white/80 backdrop-blur-sm">
+                <div class="loader mb-4"></div>
+                <p id="loader-text" class="text-slate-600 font-medium animate-pulse">処理中...</p>
+            </div>
+
+            <div id="pages-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6 pb-20">
+                </div>
+        </div>
+    </div>
+
+</main>
+
+<div id="pdf-render-container" class="hidden"></div>
+
+<div id="install-modal" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4 backdrop-blur-sm opacity-0 transition-opacity duration-300">
+    <div id="install-modal-content" class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 transform scale-95 transition-transform duration-300 max-h-[90vh] overflow-y-auto">
+        <div class="text-center">
+            <div class="bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span class="material-symbols-outlined text-3xl text-blue-600">desktop_windows</span>
+            </div>
+            <h3 class="text-xl font-bold text-slate-800 mb-2">アプリの保存・利用方法</h3>
+            <p class="text-slate-600 mb-6 text-sm">
+                右上の「アプリを保存」ボタンを押すと、このツール自体をHTMLファイルとしてダウンロードできます。
+            </p>
+            <div class="space-y-4 text-left text-sm">
+                <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                    <p class="font-bold text-slate-700 mb-2">💡 ヒント</p>
+                    <ul class="list-disc list-inside text-slate-500 space-y-1 ml-1">
+                        <li><strong>空白ページ追加:</strong> メモ書き用の白紙ページを挿入できます。</li>
+                        <li><strong>PDF追加:</strong> 別のファイルを選択して、既存のページの後に結合できます。</li>
+                    </ul>
+                </div>
+            </div>
+            <button id="close-modal-btn" class="mt-6 w-full bg-slate-800 hover:bg-slate-900 text-white font-medium py-3 rounded-xl transition-colors shadow-lg">
+                閉じる
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- Configuration & Global State ---
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    const { PDFDocument, degrees, PageSizes } = PDFLib;
+
+    // 複数ファイルを管理するためのマップ
+    // Key: docId (string), Value: ArrayBuffer
+    const fileBuffers = new Map();
+    let docCounter = 0;
+    let originalFileName = "document.pdf";
+    
+    // DOM Elements
+    const uploadSection = document.getElementById('upload-section');
+    const workspaceSection = document.getElementById('workspace-section');
+    const dropZone = document.getElementById('drop-zone');
+    const editorArea = document.getElementById('editor-area'); // Drop zone for append
+    const fileInput = document.getElementById('file-input'); // Initial load
+    const appendInput = document.getElementById('append-input'); // Append load
+    const pagesGrid = document.getElementById('pages-grid');
+    const loader = document.getElementById('loader');
+    const loaderText = document.getElementById('loader-text');
+    const pageCountLabel = document.getElementById('page-count');
+    
+    // --- Initialization ---
+    
+    new Sortable(pagesGrid, {
+        animation: 150,
+        ghostClass: 'sortable-ghost',
+        dragClass: 'sortable-drag',
+        delay: 100,
+        delayOnTouchOnly: true,
+        onEnd: updatePageCount
+    });
+
+    // --- Helper Function: Native Download ---
+    function triggerDownload(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
+
+    // --- Event Listeners ---
+
+    // 1. Initial File Input
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) handleFile(e.target.files[0], false);
+        e.target.value = ''; // Reset input
+    });
+
+    // 2. Append File Input
+    appendInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) handleFile(e.target.files[0], true);
+        e.target.value = ''; // Reset input
+    });
+
+    // 3. Drag & Drop (Initial)
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('border-blue-500', 'bg-blue-50'); });
+    dropZone.addEventListener('dragleave', (e) => { e.preventDefault(); dropZone.classList.remove('border-blue-500', 'bg-blue-50'); });
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('border-blue-500', 'bg-blue-50');
+        if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0], false);
+    });
+
+    // 4. Drag & Drop (Append - on the grid area)
+    editorArea.addEventListener('dragover', (e) => { e.preventDefault(); editorArea.classList.add('bg-blue-50'); });
+    editorArea.addEventListener('dragleave', (e) => { e.preventDefault(); editorArea.classList.remove('bg-blue-50'); });
+    editorArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        editorArea.classList.remove('bg-blue-50');
+        if (e.dataTransfer.files.length > 0) {
+            // Check if it's PDF
+            const file = e.dataTransfer.files[0];
+            if (file.type === 'application/pdf') {
+                handleFile(file, true);
+            }
+        }
+    });
+
+    // Buttons
+    document.getElementById('reset-btn').addEventListener('click', resetApp);
+    document.getElementById('save-btn').addEventListener('click', savePDF);
+    document.getElementById('add-blank-btn').addEventListener('click', addBlankPage);
+    
+    document.getElementById('downloadSourceBtn').addEventListener('click', () => {
+        const htmlContent = document.documentElement.outerHTML;
+        const blob = new Blob([htmlContent], { type: 'text/html' });
+        triggerDownload(blob, 'EasyPDF_App.html');
+    });
+
+    // Modal Logic
+    const installModal = document.getElementById('install-modal');
+    const installModalContent = document.getElementById('install-modal-content');
+    
+    document.getElementById('installAppBtn').addEventListener('click', () => {
+        installModal.classList.remove('hidden');
+        setTimeout(() => { installModal.classList.remove('opacity-0'); installModalContent.classList.add('scale-100'); }, 10);
+    });
+    document.getElementById('close-modal-btn').addEventListener('click', () => {
+        installModal.classList.add('opacity-0'); installModalContent.classList.remove('scale-100');
+        setTimeout(() => { installModal.classList.add('hidden'); }, 300);
+    });
+    installModal.addEventListener('click', (e) => {
+        if (e.target === installModal) document.getElementById('close-modal-btn').click();
+    });
+
+    // --- Core Functions ---
+
+    // isAppend: trueなら既存のグリッドに追加、falseなら新規作成（リセット）
+    async function handleFile(file, isAppend) {
+        if (file.type !== 'application/pdf') {
+            alert('PDFファイルのみ対応しています。');
+            return;
+        }
+
+        if (!isAppend) {
+            // Reset everything for new file
+            fileBuffers.clear();
+            docCounter = 0;
+            pagesGrid.innerHTML = '';
+            originalFileName = file.name;
+        }
+
+        // UI update
+        uploadSection.classList.add('hidden');
+        workspaceSection.classList.remove('hidden');
+        loader.classList.remove('hidden');
+        loaderText.textContent = isAppend ? "PDFを追加中..." : "PDFを読み込み中...";
+
+        try {
+            const arrayBuffer = await file.arrayBuffer();
+            
+            // Generate unique ID for this document load
+            docCounter++;
+            const docId = `doc_${docCounter}`;
+            
+            // Store a CLONE of the buffer to prevent detachment issues
+            fileBuffers.set(docId, arrayBuffer.slice(0));
+
+            // Render pages from this buffer
+            await renderPages(docId, arrayBuffer);
+            
+            updatePageCount();
+        } catch (error) {
+            console.error(error);
+            alert('PDFの読み込みに失敗しました。');
+            if (!isAppend) resetApp();
+        } finally {
+            loader.classList.add('hidden');
+        }
+    }
+
+    async function renderPages(docId, arrayBuffer) {
+        const loadingTask = pdfjsLib.getDocument(arrayBuffer);
+        const pdf = await loadingTask.promise;
+
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+            const page = await pdf.getPage(pageNum);
+            const viewport = page.getViewport({ scale: 0.3 }); 
+            
+            // Create Card Element
+            const card = createCardElement();
+            
+            // Metadata for reconstruction
+            card.dataset.docId = docId;
+            card.dataset.pageIndex = pageNum - 1; // 0-based index for pdf-lib
+            card.dataset.rotation = 0;
+
+            // Canvas
+            const canvasContainer = document.createElement('div');
+            canvasContainer.className = "relative bg-slate-50 rounded-lg overflow-hidden flex items-center justify-center border border-slate-100 flex-grow w-full";
+            // Aspect ratio hack handled by flex layout, but let's set min height for visual consistency
+            canvasContainer.style.minHeight = "140px";
+
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+            canvas.className = "max-w-full max-h-full object-contain transition-transform duration-300 shadow-sm";
+            
+            await page.render({ canvasContext: context, viewport: viewport }).promise;
+            
+            canvasContainer.appendChild(canvas);
+            card.insertBefore(canvasContainer, card.lastChild); // Insert before controls
+            
+            // Store reference to canvas for rotation
+            card.dataset.canvasId = `canvas_${docId}_${pageNum}`;
+            canvas.id = card.dataset.canvasId;
+            
+            // Add page number badge (UI only)
+            const badge = card.querySelector('.page-badge');
+            if(badge) badge.textContent = pageNum;
+
+            // Add rotation logic
+            setupRotation(card, canvas);
+
+            pagesGrid.appendChild(card);
+        }
+    }
+
+    function addBlankPage() {
+        const card = createCardElement();
+        card.dataset.docId = 'blank';
+        card.dataset.pageIndex = -1;
+        card.dataset.rotation = 0;
+
+        // Create a blank white canvas representation
+        const canvasContainer = document.createElement('div');
+        canvasContainer.className = "relative bg-white rounded-lg overflow-hidden flex items-center justify-center border border-slate-200 flex-grow w-full";
+        canvasContainer.style.minHeight = "140px";
+
+        const canvas = document.createElement('canvas');
+        canvas.width = 210; // A4 aspect ratio approx
+        canvas.height = 297;
+        canvas.className = "w-full h-full object-contain transition-transform duration-300 bg-white";
+        // Fill white
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0,0, 210, 297);
+        // Draw simple border or text
+        ctx.strokeStyle = "#e2e8f0";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(0,0, 210, 297);
+        ctx.fillStyle = "#cbd5e1";
+        ctx.font = "30px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("Blank", 105, 150);
+
+        canvasContainer.appendChild(canvas);
+        card.insertBefore(canvasContainer, card.lastChild);
+
+        const badge = card.querySelector('.page-badge');
+        if(badge) {
+            badge.textContent = "白紙";
+            badge.className = "text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200";
+        }
+        
+        setupRotation(card, canvas);
+        pagesGrid.appendChild(card);
+        updatePageCount();
+        
+        // Scroll to bottom
+        const editorArea = document.getElementById('editor-area');
+        editorArea.scrollTop = editorArea.scrollHeight;
+    }
+
+    function createCardElement() {
+        const card = document.createElement('div');
+        card.className = "pdf-page-card bg-white rounded-xl shadow-sm border border-slate-200 p-3 relative group flex flex-col gap-2 select-none h-full hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing";
+        
+        // Delete Button
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = "absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-10 hover:bg-red-600 hover:scale-110 transform duration-200";
+        deleteBtn.innerHTML = '<span class="material-symbols-outlined text-sm block font-bold">close</span>';
+        deleteBtn.title = "削除";
+        deleteBtn.onclick = (e) => {
+            e.stopPropagation();
+            card.remove();
+            updatePageCount();
+        };
+        card.appendChild(deleteBtn);
+
+        // Placeholder for content (Canvas container) - inserted later
+        
+        // Controls Footer
+        const controls = document.createElement('div');
+        controls.className = "flex justify-between items-center px-1 mt-auto w-full pt-1";
+
+        const pageNumSpan = document.createElement('span');
+        pageNumSpan.className = "page-badge text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded";
+        pageNumSpan.textContent = "-"; // Set later
+
+        const rotateControls = document.createElement('div');
+        rotateControls.className = "flex gap-1";
+        
+        // Buttons will be wired up in setupRotation
+        controls.append(pageNumSpan, rotateControls);
+        card.appendChild(controls);
+
+        return card;
+    }
+
+    function setupRotation(card, canvas) {
+        const controls = card.querySelector('div:last-child > div:last-child'); // rotateControls div
+        const btnClass = "p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors";
+
+        const rotLeftBtn = document.createElement('button');
+        rotLeftBtn.className = btnClass;
+        rotLeftBtn.innerHTML = '<span class="material-symbols-outlined text-lg block">rotate_left</span>';
+        rotLeftBtn.onclick = () => rotatePage(card, canvas, -90);
+
+        const rotRightBtn = document.createElement('button');
+        rotRightBtn.className = btnClass;
+        rotRightBtn.innerHTML = '<span class="material-symbols-outlined text-lg block">rotate_right</span>';
+        rotRightBtn.onclick = () => rotatePage(card, canvas, 90);
+
+        controls.innerHTML = '';
+        controls.append(rotLeftBtn, rotRightBtn);
+    }
+
+    function rotatePage(cardElement, canvasElement, degrees) {
+        let currentRotation = parseInt(cardElement.dataset.rotation) || 0;
+        let newRotation = currentRotation + degrees;
+        cardElement.dataset.rotation = newRotation;
+        canvasElement.style.transform = `rotate(${newRotation}deg)`;
+    }
+
+    function updatePageCount() {
+        pageCountLabel.textContent = `${pagesGrid.children.length} ページ`;
+    }
+
+    function resetApp() {
+        if(!confirm('すべての変更を破棄してリセットしますか？')) return;
+        fileBuffers.clear();
+        docCounter = 0;
+        pagesGrid.innerHTML = '';
+        fileInput.value = '';
+        appendInput.value = '';
+        workspaceSection.classList.add('hidden');
+        uploadSection.classList.remove('hidden');
+    }
+
+    async function savePDF() {
+        const cards = Array.from(pagesGrid.children);
+        if (cards.length === 0) {
+            alert("保存するページがありません。");
+            return;
+        }
+
+        const saveBtn = document.getElementById('save-btn');
+        const originalBtnContent = saveBtn.innerHTML;
+        saveBtn.innerHTML = '<div class="loader w-4 h-4 border-2 border-white border-t-transparent mr-2"></div> 処理中...';
+        saveBtn.disabled = true;
+
+        try {
+            // 1. Create a new PDF Document
+            const newPdfDoc = await PDFDocument.create();
+
+            // 2. Load all necessary source PDFs into pdf-lib objects ONCE
+            // This optimization avoids parsing the same PDF multiple times
+            const loadedPdfDocs = new Map(); // Map<docId, PDFDocument>
+
+            // Identify unique docIds used in the grid
+            const usedDocIds = new Set(cards.map(c => c.dataset.docId).filter(id => id !== 'blank'));
+
+            for (const docId of usedDocIds) {
+                const buffer = fileBuffers.get(docId);
+                if (!buffer || buffer.byteLength === 0) {
+                    throw new Error(`文書データが破損しています (ID: ${docId})。`);
+                }
+                const pdfDoc = await PDFDocument.load(buffer);
+                loadedPdfDocs.set(docId, pdfDoc);
+            }
+
+            // 3. Assemble the new PDF
+            for (const card of cards) {
+                const docId = card.dataset.docId;
+                const pageIndex = parseInt(card.dataset.pageIndex);
+                const rotationAdded = parseInt(card.dataset.rotation) || 0;
+
+                let page;
+
+                if (docId === 'blank') {
+                    // Add a blank A4 page
+                    page = newPdfDoc.addPage(PageSizes.A4);
+                } else {
+                    // Copy page from source
+                    const sourcePdfDoc = loadedPdfDocs.get(docId);
+                    const [copiedPage] = await newPdfDoc.copyPages(sourcePdfDoc, [pageIndex]);
+                    page = newPdfDoc.addPage(copiedPage);
+                    
+                    // Handle existing rotation + user rotation
+                    const currentRotation = page.getRotation().angle;
+                    page.setRotation(degrees(currentRotation + rotationAdded));
+                }
+                
+                // If it was a blank page, we might want to rotate it too if user requested (though visual only usually)
+                if (docId === 'blank' && rotationAdded !== 0) {
+                     const currentRotation = page.getRotation().angle;
+                     page.setRotation(degrees(currentRotation + rotationAdded));
+                }
+            }
+
+            // 4. Save and Download
+            const pdfBytes = await newPdfDoc.save();
+            
+            const nameParts = originalFileName.split('.');
+            const ext = nameParts.length > 1 ? nameParts.pop() : "pdf";
+            const newName = `${nameParts.join('.')}_edited.${ext}`;
+            
+            const blob = new Blob([pdfBytes], { type: "application/pdf" });
+            triggerDownload(blob, newName);
+
+        } catch (error) {
+            console.error("Save error:", error);
+            alert("保存中にエラーが発生しました。\n" + error.message);
+        } finally {
+            saveBtn.innerHTML = originalBtnContent;
+            saveBtn.disabled = false;
+        }
+    }
+</script>
+
+</body>
+</html>
